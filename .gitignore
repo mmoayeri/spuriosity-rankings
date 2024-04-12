@@ -1,3 +1,15 @@
+outputs
+cached_ftrs
+datasets/scalars.csv
+datasets/__pycache__
+datasets/cxr_dataset.py
+final_layer_tuning.py
+example.py
+main.py
+training_utils.py
+UTKFace_gender1
+UTKFace_gender
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
