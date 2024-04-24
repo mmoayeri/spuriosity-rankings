@@ -22,11 +22,11 @@ def load_cached_data(cache_path: str):
 
 ### Robust feature encoder loading
 
-_ROBUST_MODELS_ROOT = '/cmlscratch/mmoayeri/models/pretrained-robust/'
+_ROBUST_MODELS_ROOT = './models/'
 
-def load_robust_encoder(mkey='resnet50_l2_eps3'):
-    full_model_dict = torch.load(_ROBUST_MODELS_ROOT + mkey + '.ckpt')['model']
-    arch = mkey.split('_')[0]
+def load_robust_encoder(mkey='robust_resnet50'):
+    full_model_dict = torch.load(_ROBUST_MODELS_ROOT + mkey + '.pth')['model']
+    arch = mkey.split('_')[1]
     model = torchvision.models.get_model(arch)
 
     # Reformat model_dict to be compatible with torchvision
@@ -124,7 +124,7 @@ def fit_head(ftrs_dict, labels_dict, close_spurious_gap_info=None,
                 msg += f', Spurious gap: {spurious_gap:.2f}%'
             print(msg)
 
-            if spurious_gap < stop_thresh:
+            if close_spurious_gap_info and spurious_gap < stop_thresh:
                 break
     
     acc = accuracy_fn.metric(head, val_ftrs, val_labels)
@@ -258,7 +258,7 @@ def visualize_ftr(cls_ind, ftr_ind, ftrs, labels, dset, encoder, save_path, pred
 
     grid = torchvision.utils.make_grid(all_viz, nrow=nrow, padding=4, pad_value=1)
     os.makedirs('/'.join(save_path.split('/')[:-1]), exist_ok=True)
-    curr_save_path = save_path[:-4] + '.jpg'
+    curr_save_path = save_path[:-4] + f'__gap_{int(gap)}.jpg'
     to_pil(grid).save(curr_save_path)
 
     return grid
@@ -307,7 +307,7 @@ def consolidate_rankings(bot_idx, top_idx, spurious_ftrs_by_cls, k=100):
 ### Putting it all together
 
 def ftr_discovery(train_dset, val_dset, dsetname, num_ftrs_per_class=15, min_gap=20):
-    _RESULTS_ROOT = './'
+    _RESULTS_ROOT = './outputs/'
     dset_results_root = os.path.join(_RESULTS_ROOT, dsetname)
     os.makedirs(dset_results_root, exist_ok=True)
 
@@ -326,18 +326,17 @@ def ftr_discovery(train_dset, val_dset, dsetname, num_ftrs_per_class=15, min_gap
     predictions_path = os.path.join(dset_results_root, 'predictions.pkl')
     lin_head_path = os.path.join(dset_results_root, 'lin_head_data.pkl')
     if not os.path.exists(most_important_ftrs_path):
-        print("\n\nTraining linear layer on encoded features.")
-        eval_fn = Accuracy()
-        head, acc = fit_head(ftrs_dict, labels_dict, eval_fn)
-        print(f'\nLinear layer trained. Accuracy: {acc*100:.2f}%.')
-        print("\n\nExtracting salient features.")
+        print("\nTraining linear layer on encoded features.")
+        head, acc = fit_head(ftrs_dict, labels_dict)
+        print(f'\nLinear layer trained. Accuracy: {acc:.2f}%.')
+        print("\nExtracting salient features.")
 
         most_important_ftrs, preds = find_important_ftrs(ftrs_dict['train'], labels_dict['train'], head)
         cache_data(most_important_ftrs_path, most_important_ftrs)
         cache_data(predictions_path, preds)
 
         head_data = dict({'state': head.state_dict(), 'val_acc': acc, 'shape': head.weight.shape})
-        cache_data(head_data, head_save_path)
+        cache_data(lin_head_path, head_data)
     else: 
         print("\n\nUsing cached important features and predictions.")
         most_important_ftrs = load_cached_data(most_important_ftrs_path)
@@ -348,7 +347,7 @@ def ftr_discovery(train_dset, val_dset, dsetname, num_ftrs_per_class=15, min_gap
         os.makedirs(cls_save_root, exist_ok=True)
         in_cls_idx = np.where(labels_dict['train'] == cls_ind)[0]
         class_acc = (preds[in_cls_idx] == cls_ind).mean().item()*100
-        print(f"\n\nProcessing {train_dset.classes[cls_ind]} class. Overall accuracy for class: {class_acc:.2f}%")
+        print(f"Processing {train_dset.classes[cls_ind]} class. Overall accuracy for class: {class_acc:.2f}%")
         for ftr_rank in tqdm(range(num_ftrs_per_class)):
             ftr_ind = most_important_ftrs[cls_ind][ftr_rank]
             save_path = os.path.join(cls_save_root, f"rank_{ftr_rank}_ftr_{ftr_ind}.jpg")

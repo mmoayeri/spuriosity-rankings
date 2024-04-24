@@ -7,8 +7,7 @@ final_layer_tuning.py
 example.py
 main.py
 training_utils.py
-UTKFace_gender1
-UTKFace_gender
+models/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
